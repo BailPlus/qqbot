@@ -1,8 +1,8 @@
 #Copyright Bail 2024
-#antiad 反广告联合机器人 v1.0_1
-#2024.8.19
+#antiad 反广告联合机器人 v1.0.1_2
+#2024.8.19-2024.8.20
 
-GROUOS = (434025815,)   # 要管理的群列表
+GROUPS = (434025815,)   # 要管理的群列表
 DATA = '/home/bail/git/qqbot/data'  # 机器人数据目录
 
 import api_ws as api
@@ -16,17 +16,20 @@ def recv():
         msg:dict = json.loads(ws.recv())
         posttype = msg.get('post_type')
         reqtype = msg.get('request_type')
+        subtype = msg.get('subtype')
+        gid = msg.get('group_id')
         if posttype == 'request':
             if reqtype == 'friend':
                 print('检测到加人广告')
-                blacklist(msg.get('user_id'))
-            elif reqtype == 'group':
+                blacklist(msg.get('user_id'),msg)
+            elif (reqtype == 'group') and (subtype == 'invite') and (gid not in GROUPS):
                 print('检测到拉人广告')
-                blacklist(msg.get('user_id'))
-def blacklist(qq:int):
-    for i in GROUOS:
+                blacklist(msg.get('user_id'),msg)
+def blacklist(qq:int,msg):
+    for i in GROUPS:
         api.sendg(ws,i,f'检测到广告: [CQ:at,qq={qq}]')
-        ##api.kick(ws,i,qq,True)
+        print(msg)
+        api.kick(ws,i,qq,False)
 def main():
     recv()
     return 0
