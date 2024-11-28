@@ -79,3 +79,12 @@ def recvprint(ws:Ws):
         while True:
             print(ws.recv())
     threading.Thread(target=f).start()
+def set_group_add_request(ws,flag:str,subtype:str,approve:bool,reason:str=''):
+    '''处理加群请求（包括申请(add)和邀请(invite)）
+flag(str):请求id
+subtype(`add`/`invite`):请求种类，上级api要求填写该值
+approve(bool):是否同意
+reason(str):拒绝理由'''
+    url = 'set_group_add_request'
+    data = {'flag':flag,'sub_type':subtype,'approve':approve,'reason':reason}
+    submit(ws,url,data,'处理')

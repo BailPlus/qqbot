@@ -1,6 +1,6 @@
 import json,requests
 
-URL = 'http://localhost:8089/'
+URL = 'http://localhost:3000/'
 
 def submit(url:str,data:dict,operate:str)->dict:
     res = json.loads(requests.get(URL+url,params=data).text)
