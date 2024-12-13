@@ -6,7 +6,7 @@ COOKIE = ''
 URL = 'https://ctf.redrock.team/api/game/5/details'
 UA = 'BailQqbot/0'
 USERS = ()
-GROUPS = (127510064,)
+GROUPS = ()
 HELLO_WORD = '您的好友 红岩ctf看板器 已上线'
 
 import requests,api_ws,time
@@ -31,10 +31,13 @@ class Monitor:
             api_ws.sendg(self.ws,i,msg)
     def getinfo(self)->Info:
         headers = {'User-Agent':UA,'Cookie':self.cookie}
-        resp = requests.get(URL,headers=headers)
+        try:
+            resp = requests.get(URL,headers=headers)
+        except requests.exceptions.ConnectionError:
+            self.push('日常掉线，已重新上线')
         # 请求错误处理
         if resp.status_code != 200:
-            raise RuntimeError(f'请求失败({resp.status_code}): {resp.json()}')
+            self.push(f'请求失败({resp.status_code}): {resp.json()}')
         # 处理信息
         info = Info(resp.json())
         return info
