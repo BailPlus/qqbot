@@ -34,7 +34,7 @@ class Monitor:
         try:
             resp = requests.get(URL,headers=headers)
         except requests.exceptions.ConnectionError:
-            self.push('日常掉线，已重新上线')
+            print('日常掉线，已重新上线')
         # 请求错误处理
         if resp.status_code != 200:
             self.push(f'请求失败({resp.status_code}): {resp.json()}')
