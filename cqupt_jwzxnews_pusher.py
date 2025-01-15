@@ -9,10 +9,21 @@ AI_URL = 'http://localhost:11434/api/generate'  # AI生成api
 
 import api_ws,requests,sys,time
 
+class News:
+    def __init__(self,raw_data:dict):
+        self.raw_data = raw_data
+        self.id = raw_data['fileId']
+        self.title = raw_data['title']
+        self.publish_time = raw_data['pubTime']
+        self.readcount = raw_data['readCount']
+        self.publisher_name = raw_data['teaName']
+    def __eq__(self, value) -> bool:
+        return self.id == value.id
 class Bot:
-    def __init__(self):
+    def __init__(self,islazy:bool):
         self.news = self.get_news()
         self.ws = api_ws.connect()
+        self.islazy = islazy
     def get_news(self)->dict:
         '''获取新闻动态'''
         newsjson = requests.get(NEWS_URL).json()
@@ -41,7 +52,7 @@ class Bot:
         payload = {"stream":False,"model": "qwen2.5","prompt": "请使用一句话向同学们问早安，50字左右"}
         words = requests.post(AI_URL,json=payload).json().get('response','早上好喵~')
         return words
-    def construct_post_text(self,news:list):
+    def construct_post_text(self,news:list[News]):
         '''构造推文'''
         texts = []
         texts.append(time.strftime('今天是%m.%d'))
@@ -59,16 +70,6 @@ class Bot:
             api_ws.sendu(self.ws,i,msg)
         for i in SUBSCRIBED_GROUPS:
             api_ws.sendg(self.ws,i,msg)
-class News:
-    def __init__(self,raw_data:dict):
-        self.raw_data = raw_data
-        self.id = raw_data['fileId']
-        self.title = raw_data['title']
-        self.publish_time = raw_data['pubTime']
-        self.readcount = raw_data['readCount']
-        self.publisher_name = raw_data['teaName']
-    def __eq__(self, value) -> bool:
-        return self.id == value.id
 class EmptyNewsError(ValueError):
     '''获取教务在线通知为空'''
     def __init__(self,t:str):
@@ -77,7 +78,8 @@ class EmptyNewsError(ValueError):
         return self.t
 
 def main():
-    bot = Bot()
+    islazy = '--lazy' in sys.argv
+    bot = Bot(islazy)
     isnow = '--now' in sys.argv
     if isnow:
         new_news = bot.get_new_news()
@@ -89,8 +91,9 @@ def main():
             time.sleep(1800)
             continue
         new_news = bot.get_new_news()
-        msg = bot.construct_post_text(new_news)
-        bot.publish_new_news(msg)
+        if not bot.islazy or new_news:
+            msg = bot.construct_post_text(new_news)
+            bot.publish_new_news(msg)
         time.sleep(3600)
 
 if __name__ == '__main__':
