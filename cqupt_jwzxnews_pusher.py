@@ -6,6 +6,7 @@ SUBSCRIBED_USERS = ()   # 已订阅通知的个人
 SUBSCRIBED_GROUPS = ()    # 已订阅通知的群组
 NEWS_URL = 'http://jwzx.cqupt.edu.cn/data/json_files.php?mdq4jDUd=oR0rgGlqEiwg.Vw6yzIfDd7QM.1xnuJsPD4tiWE5TYGQfAEdsYWGAcq2ShUAsk2bZzsMMA8azBKjllJNN1ye7pf95_ADLbh.qnVDF20pYFRkk5nyMik9vGA5dOHQQQchX1lV_s8kIK9'  # 通知获取链接
 AI_URL = 'http://localhost:11434/api/generate'  # AI生成api
+UA = 'BailQqbot/0'
 
 import api_ws,requests,sys,time
 
@@ -26,7 +27,7 @@ class Bot:
         self.islazy = islazy
     def get_news(self)->dict:
         '''获取新闻动态'''
-        newsjson = requests.get(NEWS_URL).json()
+        newsjson = requests.get(NEWS_URL,headers={'X-Forwarded-For':'222.177.140.114','User-Agent':UA}).json()
         # 检查是否为空
         if not newsjson['totalPage']:
             raise EmptyNewsError('获取新闻动态为空，请检查URL中mdq4jDUd字段是否正确！')
