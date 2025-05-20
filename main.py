@@ -12,7 +12,7 @@ plugins = (printmsg,printrecall,libkeyword)
 @app.route('/',methods=['POST'])
 def main():
     data = json.loads(request.get_data().decode())
-##    print(data)
+    print(data)
 
     #向各插件推送
     for i in plugins:
