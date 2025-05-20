@@ -18,5 +18,5 @@ while True:
         text = msg.get('raw_message')
         msgid = msg.get('message_id')
 
-        if text == '[CQ:at,qq=3483498155,name=x_shine]':
+        if text.strip() == '[CQ:at,qq=3483498155]':
             api.sendg(ws,gid,f'[CQ:reply,id={msgid}][CQ:at,qq={uid}]')
