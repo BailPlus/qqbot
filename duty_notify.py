@@ -6,9 +6,7 @@ GID = 0
 DUTIERS = ()
 OFFSET = 0
 
-import api_ws as api,time
-
-ws = api.connect()
+import api_http as api,time
 
 def getdutier():
     datestamp = (time.time()+28800)//86400
@@ -37,5 +35,5 @@ while True:
             time.sleep(3600)
     dutier = getdutier()
 ##    print(dutier)
-    api.sendg(ws,GID,f'今天轮[CQ:at,qq={dutier}]值日')
+    api.sendg(GID,f'今天轮[CQ:at,qq={dutier}]值日')
     time.sleep(300)
