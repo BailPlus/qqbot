@@ -7,16 +7,17 @@ import json,api_ws as api
 
 class OfflineHandler(ABC):
     """下线处理器"""
+    def __init__(self):
+        self.ws = api.connect()
+
     @abstractmethod
     def handle(self,msg:dict):
         """处理下线通知"""
 
     def run(self):
         """运行处理器"""
-        ws = api.connect()
-        print('I: 已连接')
         while True:
-            msg:dict = json.loads(ws.recv())
+            msg:dict = json.loads(self.ws.recv())
             if msg.get('post_type') != 'notice':
                 continue
             if msg.get('notice_type') != "bot_offline":

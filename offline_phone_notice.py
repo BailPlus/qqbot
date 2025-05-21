@@ -8,11 +8,15 @@ import json,socket,sys,subprocess
 
 class PhoneNoticeClient(OfflineHandler):
     def __init__(self):
+        super().__init__()
+        print('I: ws已连接')
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.connect(('...', ...))
+        print('I: socket已连接')
     @override
     def handle(self, msg: dict):
-        self.socket.send(json.dumps(msg).encode()+b'\r\n')
+        print(f'I: 已下线：{msg}')
+        self.socket.send(msg.get('message','未知原因').encode()+b'\r\n')
 
 def PhoneNoticeServer():
     while True:
