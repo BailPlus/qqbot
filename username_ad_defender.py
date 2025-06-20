@@ -61,6 +61,7 @@ class Dao:
 
     def __init__(self):
         self.conn = sqlite3.connect(DBNAME)
+        self.create_table()
 
     def create_table(self):
         self.conn.execute('''
@@ -85,7 +86,7 @@ class Dao:
         self.conn.commit()
 
 class DefaultReceiver(MsgReceiver):
-    conn: websocket.WebSocket
+    ws: websocket.WebSocket
 
     def __init__(self, ws: websocket.WebSocket):
         self.ws = ws
@@ -93,7 +94,7 @@ class DefaultReceiver(MsgReceiver):
     @override
     def recv(self) -> Message:
         """接收消息"""
-        msg = json.loads(self.conn.recv())
+        msg = json.loads(self.ws.recv())
         if msg.get('post_type') != 'message':
             raise NotAMessage
         if msg.get('message_type') != 'group':
@@ -147,9 +148,11 @@ class DefaultDefender(DefendHandler):
 
 class DefaultIgnoreHandler(IgnoreHandler):
     dao: Dao
+    ws: websocket.WebSocket
 
-    def __init__(self, dao: Dao):
+    def __init__(self, dao: Dao, ws: websocket.WebSocket):
         self.dao = dao
+        self.ws = ws
 
     @override
     def auth(self, msg: Message):
@@ -157,7 +160,26 @@ class DefaultIgnoreHandler(IgnoreHandler):
     
     @override
     def handle(self, msg: Message):
-        self.dao.add_ignore(msg.uid)
+        if not self.auth(msg):
+            api.sendg(self.ws, msg.gid, '权限不足')
+            return
+
+        try:
+            qq_uid_str = msg.text.split()[1]
+        except IndexError:
+            api.sendg(self.ws, msg.gid, '命令语法不正确。格式为：/ignore <QQ号>')
+            return
+        try:
+            qq_uid = int(qq_uid_str)
+        except ValueError:
+            api.sendg(self.ws, msg.gid, 'QQ号不正确')
+            return
+        try:
+            self.dao.add_ignore(qq_uid)
+        except Exception:
+            api.sendg(self.ws, msg.gid, '添加失败')
+        else:
+            api.sendg(self.ws, msg.gid, f'已将{qq_uid}添加至白名单')
 
 
 class IgnoreThisEvent(Exception):
@@ -179,7 +201,7 @@ def main():
     msg_receiver = DefaultReceiver(conn)
     judger = DefaultJudger(dao)
     defend_handler = DefaultDefender(conn)
-    ignore_handler = DefaultIgnoreHandler(dao)
+    ignore_handler = DefaultIgnoreHandler(dao, conn)
 
     while True:
         try:
