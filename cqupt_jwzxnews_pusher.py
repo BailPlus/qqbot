@@ -77,14 +77,14 @@ class Bot:
         '''获取相较于上次获取新增的动态'''
         news = self.get_news()
         new_news = [i for i in news if i not in self.news]
-        self.news = new_news
+        self.news = news
         return new_news
 
     def get_goodmorning_words(self)->str:
         '''通过调用本地AI获取早安问候语'''
         # TODO: 改成使用ollama sdk进行调用
-        payload = {"stream":False,"model": "qwen3","prompt": "请使用一句话向同学们问早安，50字左右"}
-        words = requests.post(AI_URL,json=payload).json().get('response','早上好喵~')
+        payload = {"stream":False,"model": "qwen2.5","prompt": "请使用一句话向同学们问早安，50字左右"}
+        words = requests.post(AI_URL,json=payload).json().get('response','早上好喵~愿这一天充满平安喜乐！')
         return words
 
     def construct_post_text(self,news:list[News]):
