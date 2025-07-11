@@ -1,16 +1,22 @@
 #Copyright Bail 2024-2025
-#qqbot:cqupt_jwzxnews_pusher 重邮教务在线通知推送器 v1.1_2
-#2024.11.27-2025.5.21
+#qqbot:cqupt_jwzxnews_pusher 重邮教务在线通知推送器 v1.2_3
+#2024.11.27-2025.7.11
+
+from dataclasses import dataclass
+from abc import ABC,abstractmethod
+from bs4 import BeautifulSoup, Tag
+from selenium.webdriver import Firefox, FirefoxOptions
+from selenium.webdriver.firefox.service import Service as FirefoxService
+import api_http,requests,sys,time,json,os
 
 SUBSCRIBED_USERS = ()   # 已订阅通知的个人
 SUBSCRIBED_GROUPS = ()    # 已订阅通知的群组
-NEWS_URL = 'http://jwzx.cqupt.edu.cn/data/json_files.php?mdq4jDUd=oR0rgGlqEiwg.Vw6yzIfDd7QM.1xnuJsPD4tiWE5TYGQfAEdsYWGAcq2ShUAsk2bZzsMMA8azBKjllJNN1ye7pf95_ADLbh.qnVDF20pYFRkk5nyMik9vGA5dOHQQQchX1lV_s8kIK9'  # 通知获取链接
+NEWS_URL = 'https://jwc.cqupt.edu.cn/tzgg.htm'  # 通知获取链接
 AI_URL = 'http://localhost:11434/api/generate'  # AI生成api
 UA = 'BailQqbot/0'
 NEWS_FILE = 'news.json'  # 通知列表文件
+FIREFOX_DRIVER_PATH = 'geckodriver'
 
-from dataclasses import dataclass
-import api_http,requests,sys,time,json,os
 
 @dataclass(frozen=True)
 class News:
@@ -23,7 +29,7 @@ class News:
     publisher_name: str
 
     @classmethod
-    def from_json(cls,raw_data:dict):
+    def from_json(cls,raw_data:dict) -> 'News':
         return cls(
             raw_data=raw_data,
             id=raw_data['fileId'],
@@ -33,17 +39,83 @@ class News:
             publisher_name=raw_data['teaName']
         )
 
+    @classmethod
+    def from_dom(cls, news: Tag) -> 'News':
+        """dom接受新版教务处网站`/tzgg.htm`页面中class="newlist1"的div标签"""
+        return cls(
+            raw_data={'dom': str(news)},
+            id=news.get('href'), # type: ignore
+            title=news.find('h3').text.strip(), # type: ignore
+            publish_time=news.find('span').text.strip(), # type: ignore
+            readcount=-1,
+            publisher_name='null'
+        )
+
     def __eq__(self, value) -> bool:
         return self.id == value.id
 
     def __hash__(self) -> int:
         return hash(self.id)
-    
+
+
+class NewsGetter(ABC):
+    """新闻获取器"""
+    @abstractmethod
+    def get_news(self) -> list[News]:
+        """获取新闻列表"""
+
+
+class JwzxNewsGetter(NewsGetter):
+    """旧版教务在线新闻获取器"""
+    def get_news(self) -> list[News]:
+        """获取新闻列表"""
+        newsjson = requests.get(NEWS_URL,headers={'User-Agent':UA}).json()
+        # 检查是否为空
+        if not newsjson['totalPage']:
+            raise EmptyNewsError('获取新闻动态为空，请检查URL中mdq4jDUd字段是否正确！')
+        # 新闻动态对象化
+        return [News.from_json(i) for i in newsjson['data']]
+
+
+class JwcNewsGetter(NewsGetter):
+    """新版教务处新闻获取器"""
+    options: FirefoxOptions
+
+    def __init__(self):
+        self.options = FirefoxOptions()
+        self.options.add_argument('--headless')
+
+    def __enter__(self):
+        driver = Firefox(
+            service=FirefoxService(FIREFOX_DRIVER_PATH),
+            options=self.options
+        )
+        driver.delete_all_cookies()
+        self._driver = driver
+        return driver
+
+    def get_news(self, driver: Firefox) -> list[News]:
+        driver.get(NEWS_URL)
+        time.sleep(5)
+        dom = BeautifulSoup(driver.page_source, features='lxml')\
+            .find('div', class_='newlist1')
+        if not isinstance(dom, Tag):
+            raise EmptyNewsError('新闻爬取失败')
+        return [News.from_dom(news) for news in dom.find_all('a')[:20]]
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._driver.quit()
+
+
 class Bot:
     islazy:bool
+    news_getter:NewsGetter
 
-    def __init__(self,islazy:bool):
+    def __init__(self,
+                 islazy:bool,
+                 news_getter:NewsGetter):
         self.islazy = islazy
+        self.news_getter = news_getter
         if not os.path.exists(NEWS_FILE):
             # 如果没有通知列表文件，则创建一个空的通知列表
             with open(NEWS_FILE,'w',encoding='utf-8') as f:
@@ -55,7 +127,9 @@ class Bot:
         with open(NEWS_FILE,'r',encoding='utf-8') as f:
             news = json.load(f)
         # 将通知列表对象化
-        return [News.from_json(i) for i in news]
+        return [News.from_dom(
+            BeautifulSoup(i['dom'],features='lxml').find('a') # type: ignore
+        ) for i in news]
 
     @news.setter
     def news(self,value:list[News]):
@@ -66,12 +140,9 @@ class Bot:
 
     def get_news(self)->list[News]:
         '''获取新闻动态'''
-        newsjson = requests.get(NEWS_URL, headers={'User-Agent': UA}).json()
-        # 检查是否为空
-        if not newsjson['totalPage']:
-            raise EmptyNewsError('获取新闻动态为空，请检查URL中mdq4jDUd字段是否正确！')
-        # 新闻动态对象化
-        return [News.from_json(i) for i in newsjson['data']]
+        assert isinstance(self.news_getter, JwcNewsGetter)
+        with self.news_getter as driver:
+            return self.news_getter.get_news(driver)
 
     def get_new_news(self)->list[News]:
         '''获取相较于上次获取新增的动态'''
@@ -95,7 +166,7 @@ class Bot:
         if news:
             texts.append('最新教务通知：')
             for i,j in enumerate(news):
-                texts.append(f'{i+1}. {j.title} ( http://jwzx.cqupt.edu.cn/fileShowContent.php?id={j.id} )')
+                texts.append(f'{i+1}. {j.title} ( https://jwc.cqupt.edu.cn/{j.id} )')
         else:
             texts.append('教务在线没有新通知哦~')
         return '\n'.join(texts)
@@ -116,7 +187,8 @@ class EmptyNewsError(ValueError):
 
 def main():
     islazy = '--lazy' in sys.argv
-    bot = Bot(islazy)
+    news_getter = JwcNewsGetter()
+    bot = Bot(islazy, news_getter)
     isnow = '--now' in sys.argv
     if isnow:
         new_news = bot.get_new_news()
