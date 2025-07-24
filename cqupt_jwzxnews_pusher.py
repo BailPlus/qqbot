@@ -74,6 +74,13 @@ class GreetingGetter(ABC):
         """获取问候语"""
 
 
+class PostConstructer(ABC):
+    """推文构造器"""
+    @abstractmethod
+    def construct(self, greeting: str, news: list[News]) -> str:
+        """构造推文"""
+
+
 # ===== 接口实现 =====
 class JwzxNewsGetter(NewsGetter):
     """旧版教务在线新闻获取器"""
@@ -129,19 +136,38 @@ class RequestsAiGreetingGetter(GreetingGetter):
             .get('response','早上好喵~愿这一天充满平安喜乐！')
 
 
+class TextConstructer(PostConstructer):
+    """文本推文构造器"""
+    def construct(self, greeting: str, news: list[News]):
+        '''构造推文'''
+        texts = []
+        texts.append(time.strftime('今天是%m.%d'))
+        texts.append(greeting)
+        if news:
+            texts.append('最新教务通知：')
+            for i,j in enumerate(news):
+                texts.append(f'{i+1}. {j.title} ( https://jw.cqupt.edu.cn/{j.id} )')
+        else:
+            texts.append('教务在线没有新通知哦~')
+        return '\n'.join(texts)
+
+
 # ===== 主业务逻辑 =====
 class Bot:
     islazy:bool
     news_getter:NewsGetter
     greeting_getter:GreetingGetter
+    post_constructer:PostConstructer
 
     def __init__(self,
                  islazy:bool,
                  news_getter:NewsGetter,
-                 greeting_getter:GreetingGetter):
+                 greeting_getter:GreetingGetter,
+                 post_constructer:PostConstructer):
         self.islazy = islazy
         self.news_getter = news_getter
         self.greeting_getter = greeting_getter
+        self.post_constructer = post_constructer
 
         # 如果没有通知列表文件，则创建一个空的通知列表
         if not os.path.exists(NEWS_FILE):
@@ -178,20 +204,7 @@ class Bot:
         self.news = news
         return new_news
 
-    def construct_post_text(self,news:list[News]):
-        '''构造推文'''
-        texts = []
-        texts.append(time.strftime('今天是%m.%d'))
-        texts.append(self.greeting_getter.get())
-        if news:
-            texts.append('最新教务通知：')
-            for i,j in enumerate(news):
-                texts.append(f'{i+1}. {j.title} ( https://jw.cqupt.edu.cn/{j.id} )')
-        else:
-            texts.append('教务在线没有新通知哦~')
-        return '\n'.join(texts)
-
-    def publish_new_news(self,msg:str):
+    def publish(self,msg:str):
         '''向订阅用户和群组推送推文'''
         for user in SUBSCRIBED_USERS:
             api_http.sendu(user,msg)
@@ -213,13 +226,17 @@ def main():
     bot = Bot(
         islazy='--lazy' in sys.argv,
         news_getter=JwcNewsGetter(),
-        greeting_getter=RequestsAiGreetingGetter()
+        greeting_getter=RequestsAiGreetingGetter(),
+        post_constructer=TextConstructer()
     )
     isnow = '--now' in sys.argv
     if isnow:
-        new_news = bot.get_new_news()
-        msg = bot.construct_post_text(new_news)
-        bot.publish_new_news(msg)
+        bot.publish(
+            bot.post_constructer.construct(
+                greeting=bot.greeting_getter.get(),
+                news=bot.get_new_news()
+            )
+        )
         return
     while True:
         if time.strftime('%H') != '07':
@@ -227,8 +244,12 @@ def main():
             continue
         new_news = bot.get_new_news()
         if not bot.islazy or new_news:
-            msg = bot.construct_post_text(new_news)
-            bot.publish_new_news(msg)
+            bot.publish(
+                bot.post_constructer.construct(
+                    greeting=bot.greeting_getter.get(),
+                    news=new_news
+                )
+            )
         time.sleep(3600)
 
 
